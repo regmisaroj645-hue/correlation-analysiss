@@ -1,0 +1,65 @@
+# Load libraries
+library(tidyverse)
+library(Hmisc)
+library(ggplot2)
+library(reshape2)
+
+# Traits
+traits <- c("SY", "PL", "NOB", "GN", "NET", "TSW", "DMSWY")
+
+# Convert to numeric
+saroj <- saroj %>%
+  mutate(across(all_of(traits), ~ as.numeric(as.character(.))))
+
+# Pooled replication data
+corr_data <- saroj %>%
+  select(all_of(traits)) %>%
+  drop_na()
+
+# Correlation + p-values
+rc <- rcorr(as.matrix(corr_data), type = "pearson")
+
+r_mat <- rc$r
+p_mat <- rc$P
+
+# Convert matrices to long format
+r_long <- melt(r_mat)
+p_long <- melt(p_mat)
+
+corr_long <- left_join(r_long, p_long,
+                       by = c("Var1", "Var2"),
+                       suffix = c("_r", "_p"))
+
+# Keep lower triangle only
+corr_long <- corr_long %>%
+  filter(as.numeric(Var1) > as.numeric(Var2))
+
+# Add significance stars
+corr_long <- corr_long %>%
+  mutate(
+    stars = case_when(
+      value_p < 0.001 ~ "***",
+      value_p < 0.01  ~ "**",
+      value_p < 0.05  ~ "*",
+      TRUE ~ ""
+    ),
+    label = paste0(round(value_r, 2), stars)
+  )
+
+# Plot
+ggplot(corr_long, aes(Var2, Var1, fill = value_r)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = label), size = 4) +
+  scale_fill_gradient2(
+    low = "#B2182B",
+    mid = "white",
+    high = "#2166AC",
+    midpoint = 0,
+    name = ""
+  ) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.title = element_blank()
+  ) +
+  ggtitle("")
